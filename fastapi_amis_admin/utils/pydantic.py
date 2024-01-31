@@ -12,6 +12,9 @@ from fastapi.utils import create_cloned_field
 from pydantic import BaseModel, ConfigDict, create_model
 from pydantic.version import VERSION as PYDANTIC_VERSION
 from typing_extensions import Annotated, get_args, get_origin
+from sqlalchemy.orm import class_mapper
+from sqlalchemy import inspect
+
 
 PYDANTIC_V2 = PYDANTIC_VERSION.startswith("2.")
 # todo: Deprecated `dict`,`json`,`from_orm`,`parse_obj` methods in pydantic v2
@@ -67,8 +70,11 @@ if PYDANTIC_V2:
 
     def field_allow_none(field: ModelField) -> bool:
         ann = field.field_info.annotation
+        print(f"Processing field: {field.name}, Annotation: {ann}")
         if not is_union(ann):
             origin = get_origin(ann)
+            print(f"Origin of annotation: {origin}")
+
             if origin is None:
                 return False
             elif origin is Annotated:
@@ -86,6 +92,18 @@ if PYDANTIC_V2:
         for field_name, field in model.model_fields.items():
             fields[field_name] = ModelField(field_info=field, name=field_name)
         return fields
+
+    def get_model_fields(model):
+        return class_mapper(model).columns
+
+    def field_allow_none_sqlalchemy(model, field_name: str) -> bool:
+        # 获取模型的所有列
+        model_columns = inspect(model).c
+        # 获取特定字段的列
+        column = model_columns[field_name]
+
+        # 检查列是否可为空
+        return column.nullable
 
     def model_config(model: Type[BaseModel]) -> Union[type, Dict[str, Any]]:
         return model.model_config
@@ -153,6 +171,9 @@ else:
 
     def model_fields(model: Type[BaseModel]) -> Dict[str, ModelField]:
         return model.__fields__
+
+    def get_model_fields(model):
+        return class_mapper(model).columns
 
     def model_config(model: Type[BaseModel]) -> Union[type, Dict[str, Any]]:
         return model.Config

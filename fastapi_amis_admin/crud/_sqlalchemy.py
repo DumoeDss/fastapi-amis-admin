@@ -34,6 +34,8 @@ from fastapi_amis_admin.utils.pydantic import (
     create_model_by_fields,
     field_allow_none,
     model_fields,
+    get_model_fields,
+    field_allow_none_sqlalchemy,
 )
 
 try:
@@ -316,10 +318,8 @@ class SqlalchemyCrud(
         )
 
     def _create_schema_read(self) -> Optional[Type[SchemaReadT]]:
-        if self.read_fields is None:
+        if not self.read_fields:
             return None
-        # Set the read fields to the schema update if not provided
-        self.read_fields = self.read_fields or model_fields(self.schema_update)
         # Filter out any non-model fields from the read fields
         modelfields = self.parser.filter_modelfield(self.read_fields)
         # Create the schema using the model fields
@@ -392,7 +392,8 @@ class SqlalchemyCrud(
         return self.schema_list.parse_obj(values)
 
     def _fetch_item_scalars(self, session: Session, item_id: Iterable[str]) -> List[TableModelT]:
-        sel = select(self.model).where(self.pk.in_(list(map(get_python_type_parse(self.pk), item_id))))
+        item_id_str = [str(i) for i in item_id]
+        sel = select(self.model).where(self.pk.in_(list(map(get_python_type_parse(self.pk), item_id_str))))
         return session.scalars(sel).all()
 
     async def fetch_items(self, *item_id: str) -> List[TableModelT]:
@@ -460,7 +461,9 @@ class SqlalchemyCrud(
         **kwargs,
     ) -> Dict[str, Any]:
         data = obj.dict(exclude=self.update_exclude, exclude_unset=True, by_alias=True)
-        data = {key: val for key, val in data.items() if val is not None or field_allow_none(model_fields(self.model)[key])}
+        # data = {key: val for key, val in data.items() if val is not None or field_allow_none(model_fields(self.model)[key])}
+        data = {key: val for key, val in data.items() if val is not None or field_allow_none_sqlalchemy(self.model, key)}
+
         return data
 
     async def on_filter_pre(self, request: Request, obj: Optional[SchemaFilterT], **kwargs) -> Dict[str, Any]:
