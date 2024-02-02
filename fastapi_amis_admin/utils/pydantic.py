@@ -70,10 +70,8 @@ if PYDANTIC_V2:
 
     def field_allow_none(field: ModelField) -> bool:
         ann = field.field_info.annotation
-        print(f"Processing field: {field.name}, Annotation: {ann}")
         if not is_union(ann):
             origin = get_origin(ann)
-            print(f"Origin of annotation: {origin}")
 
             if origin is None:
                 return False
